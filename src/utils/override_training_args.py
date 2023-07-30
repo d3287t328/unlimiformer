@@ -53,12 +53,12 @@ class TrainingOverridesArguments(Seq2SeqTrainingArguments):
                 )
             if self.save_steps_override == 0 or self.eval_steps_override == 0:
                 raise ValueError(
-                    f"using eval/save steps override requires both overrides to be non zero"
+                    "using eval/save steps override requires both overrides to be non zero"
                 )
             diff = (self.save_steps_override / self.eval_steps_override) % 1
             if min(1-diff, diff) > 1e-5:  # we do it like that to support fractions modulo as well, with loss of precision
                 raise ValueError(
-                    f"using eval/save steps override requires save steps override to be a multiple of eval_steps_override"
+                    "using eval/save steps override requires save steps override to be a multiple of eval_steps_override"
                 )
         if self.use_auth_token and 'AUTH_TOKEN' in os.environ:
             self.use_auth_token = os.getenv('AUTH_TOKEN')
@@ -75,32 +75,3 @@ class TrainingOverridesArguments(Seq2SeqTrainingArguments):
     def apply_overrides(self, dataset_size):
         # Uri:
         return
-        
-        if self.eval_steps_override == 0:
-            return
-        es, ss = self.eval_steps, self.save_steps
-        total_steps_per_epoch = dataset_size / self.effective_batch_size  # note that this may not be an  integer
-        eval_steps = int(total_steps_per_epoch * self.eval_steps_override)
-        if eval_steps >= self.logging_steps:
-            if eval_steps % self.logging_steps != 0:
-                logger.warning(f'Eval steps override would result in eval every {eval_steps} steps, but it is not a '
-                            f'multiple of logging steps ({self.logging_steps}) so changing to '
-                            f'{eval_steps + self.logging_steps - eval_steps % self.logging_steps}')
-                eval_steps = eval_steps + self.logging_steps - eval_steps % self.logging_steps
-        elif eval_steps < self.logging_steps:
-            logger.warning(f'Eval steps override would result in eval every {eval_steps} steps, but it is not a '
-                        f'multiple of logging steps ({self.logging_steps}) so changing to {self.logging_steps}')
-            eval_steps = self.logging_steps
-        self.eval_steps = eval_steps
-
-        save_steps = int(total_steps_per_epoch * self.save_steps_override)
-        if save_steps < eval_steps or save_steps % eval_steps != 0:
-            logger.warning(f'Save steps override would result in eval every {save_steps} steps, but it is not a '
-                        f'multiple of eval steps ({eval_steps}) so changing to '
-                        f'{save_steps + eval_steps - save_steps % self.eval_steps}')
-            save_steps = save_steps + eval_steps - save_steps % self.eval_steps
-        self.save_steps = save_steps
-
-        logger.warning(f'Using overrides with dataset of size {dataset_size} and effective batch size of '
-                    f'{self.effective_batch_size}, moving from (eval_steps, save_steps) '
-                    f'of {(es, ss)} to {(self.eval_steps, self.save_steps)}')

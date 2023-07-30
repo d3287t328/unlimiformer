@@ -12,8 +12,15 @@ class DatastoreBatch():
     def __init__(self, dim, batch_size, flat_index=False, gpu_index=False, verbose=False) -> None:
         self.indices = []
         self.batch_size = batch_size
-        for i in range(batch_size):
-            self.indices.append(Datastore(dim, use_flat_index=flat_index, gpu_index=gpu_index, verbose=verbose))
+        self.indices.extend(
+            Datastore(
+                dim,
+                use_flat_index=flat_index,
+                gpu_index=gpu_index,
+                verbose=verbose,
+            )
+            for _ in range(batch_size)
+        )
     
     def move_to_gpu(self):
         for i in range(self.batch_size):

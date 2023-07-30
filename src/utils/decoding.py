@@ -29,7 +29,7 @@ def decode(id_to_something, tokenizer=None, data_args=None):
 
     id_to_text = {}
     for id_, something in id_to_something.items():
-        if switch_case == -1 or switch_case == 0:
+        if switch_case in [-1, 0]:
             obj_to_decode = something
         else:
             if data_args is None:

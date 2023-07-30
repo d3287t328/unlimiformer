@@ -61,7 +61,11 @@ class MetricCollection(Metric):
             else:
                 result = metric(id_to_pred, id_to_labels)
 
-            results.update({f"{metric_prefix}{k}": np.mean(v) if type(v) is list else v for k, v in result.items() if type(v) is not str})
+            results |= {
+                f"{metric_prefix}{k}": np.mean(v) if type(v) is list else v
+                for k, v in result.items()
+                if type(v) is not str
+            }
 
         results["num_predicted"] = len(id_to_pred)
         results["mean_prediction_length_characters"] = np.mean([len(pred) for pred in id_to_pred_decoded.values()])
@@ -78,13 +82,9 @@ class MetricCollection(Metric):
 
 
 def load_metric(paths: List[str], **kwargs):
-    if paths is None or len(paths) == 0:
+    if paths is None or not paths:
         return None
-    if isinstance(paths, str):
-        paths = [paths]
-    else:
-        paths = [path for path in paths]
-
+    paths = [paths] if isinstance(paths, str) else list(paths)
     metric_cls_list = []
 
     scrolls_custom_metrics = []
@@ -95,7 +95,7 @@ def load_metric(paths: List[str], **kwargs):
             to_remove.append(i)
     for i in sorted(to_remove, reverse=True):
         del paths[i]
-    if len(scrolls_custom_metrics) > 0:
+    if scrolls_custom_metrics:
         scrolls_custom_metrics.insert(0, "")  # In order to have an identifying comma in the beginning
         metric_cls_list.append(ScrollsWrapper(",".join(scrolls_custom_metrics), **kwargs))
 

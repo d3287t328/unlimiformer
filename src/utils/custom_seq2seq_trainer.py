@@ -71,7 +71,7 @@ class CustomTrainer(Seq2SeqTrainer):
             Tuple[Optional[float], Optional[torch.Tensor], Optional[torch.Tensor]]: A tuple with the loss, logits and
             labels (each being optional).
         """
-        if not ("labels" in inputs or 'decoder_input_ids' in inputs):
+        if "labels" not in inputs and 'decoder_input_ids' not in inputs:
             if model.training:
                 logger.warning('When computing loss, must give labels or decoder_input_ids. '
                            'If you only perform prediction, you can safely ignore this message')
@@ -96,7 +96,7 @@ class CustomTrainer(Seq2SeqTrainer):
         gen_kwargs["num_beams"] = (
             gen_kwargs["num_beams"] if gen_kwargs.get("num_beams") is not None else self.model.config.num_beams
         )
-        default_synced_gpus = True if is_deepspeed_zero3_enabled() else False
+        default_synced_gpus = bool(is_deepspeed_zero3_enabled())
         gen_kwargs["synced_gpus"] = (
             gen_kwargs["synced_gpus"] if gen_kwargs.get("synced_gpus") is not None else default_synced_gpus
         )
@@ -120,9 +120,8 @@ class CustomTrainer(Seq2SeqTrainer):
         else:
             generation_inputs = inputs[self.model.main_input_name]
 
-         # Uri: to make sure we use cache even during mid-training evaluation, where this is disabled in general:
         gen_kwargs['use_cache'] = True
-        
+
         generated_tokens = self.model.generate(
             generation_inputs,
             **gen_kwargs,
@@ -289,9 +288,7 @@ class CustomTrainer(Seq2SeqTrainer):
                 with open(output_prediction_file, "w") as writer:
                     json.dump(predictions, writer, indent=4)
 
-                output_labels_file = os.path.join(
-                    self._output_dir, f"eval_labels.json"
-                )
+                output_labels_file = os.path.join(self._output_dir, "eval_labels.json")
                 if not os.path.isfile(output_labels_file):
                     with open(output_labels_file, "w") as writer:
                         json.dump(eval_preds[1], writer, indent=4)
@@ -299,7 +296,7 @@ class CustomTrainer(Seq2SeqTrainer):
             if self.compute_metrics is not None:
                 output.metrics.update(self.compute_metrics(*eval_preds))
 
-            # Prefix all keys with metric_key_prefix + '_'
+                # Prefix all keys with metric_key_prefix + '_'
         for key in list(output.metrics.keys()):
             if not key.startswith(f"{metric_key_prefix}_"):
                 output.metrics[f"{metric_key_prefix}_{key}"] = output.metrics.pop(key)

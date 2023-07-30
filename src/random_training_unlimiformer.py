@@ -57,7 +57,7 @@ class RandomTrainingUnlimiformer(Unlimiformer[ModelType]):
         model.forward = self.random_inputs_forward_hook
 
         decoder_layers_to_run = self.attention_layer_to_run(self.knn_layer_begin, self.knn_layer_end)
-        
+
         self.original_decoder_layer_self_attn_forward_funcs = []
         for decoder_layer in decoder_layers_to_run:
             attention = self.self_attention(decoder_layer)
@@ -70,7 +70,7 @@ class RandomTrainingUnlimiformer(Unlimiformer[ModelType]):
             decoder_layer.forward = self.create_decoder_layer_random_func(decoder_layer.forward, decoder_layer)
 
         self.original_decoder_layer_cross_attn_forward_funcs = []
-        for i, decoder_layer in enumerate(decoder_layers_to_run):
+        for decoder_layer in decoder_layers_to_run:
             attention = self.cross_attention(decoder_layer)
             self.original_decoder_layer_cross_attn_forward_funcs.append(attention.forward)
 

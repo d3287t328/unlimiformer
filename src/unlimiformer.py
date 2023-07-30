@@ -70,10 +70,7 @@ class Unlimiformer(Generic[ModelType]):
             self.model_encoder_max_len = self.actual_model_window_size
         self.window_margin = int(self.model_encoder_max_len * self.chunk_overlap / 2)
         self.num_heads = model.config.num_attention_heads
-        if self.specific_head is None:
-            self.head_nums = Ellipsis # torch.arange(0, self.num_heads, device=self.device)
-        else:
-            self.head_nums = self.specific_head
+        self.head_nums = Ellipsis if self.specific_head is None else self.specific_head
         # Save a reference to the wrapper
         model.knn_wrapper = self
         self.hooks_injected = False
@@ -438,37 +435,31 @@ class Unlimiformer(Generic[ModelType]):
         return long_inputs_encoded, long_inputs_mask
 
     def window_indices(self, total_seq_len):
-        # Copied from SLED (Ivgy et al., 2022)
-        # https://github.com/Mivg/SLED/blob/main/sled/modeling_sled.py#L467
         if total_seq_len <= self.model_encoder_max_len:
             return [(0, total_seq_len, 0, total_seq_len)]
-        else:
-            results = []
-            stride = self.model_encoder_max_len - 2 * self.window_margin
-            # if self.chunk_overlap == 0:
-            #     stride = self.model_encoder_max_len
-            context_start = update_start_ind = 0
-            context_end = self.model_encoder_max_len
-            update_end_ind = context_end - self.window_margin
-            # first window always should update from the beginning
-            results.append((context_start, context_end, update_start_ind, update_end_ind))  
+        stride = self.model_encoder_max_len - 2 * self.window_margin
+        # if self.chunk_overlap == 0:
+        #     stride = self.model_encoder_max_len
+        context_start = update_start_ind = 0
+        context_end = self.model_encoder_max_len
+        update_end_ind = context_end - self.window_margin
+        results = [(context_start, context_end, update_start_ind, update_end_ind)]
+        while context_end < total_seq_len:
+            context_end = min(total_seq_len, context_end + stride)
+            context_start = (
+                context_start + stride if context_end < total_seq_len else total_seq_len - self.model_encoder_max_len
+            )
+            update_start_ind = max(update_start_ind + stride, update_end_ind)
+            # last window always should update until the end
+            update_end_ind = (
+                min(total_seq_len, update_end_ind + stride) if context_end < total_seq_len else total_seq_len
+            )
 
-            while context_end < total_seq_len:
-                context_end = min(total_seq_len, context_end + stride)
-                context_start = (
-                    context_start + stride if context_end < total_seq_len else total_seq_len - self.model_encoder_max_len
-                )
-                update_start_ind = max(update_start_ind + stride, update_end_ind)
-                # last window always should update until the end
-                update_end_ind = (
-                    min(total_seq_len, update_end_ind + stride) if context_end < total_seq_len else total_seq_len
-                )
-
-                cs, ce, us, ue = context_start, context_end, update_start_ind - context_start, \
+            cs, ce, us, ue = context_start, context_end, update_start_ind - context_start, \
                                  update_end_ind - context_start
 
-                results.append((cs, ce, us, ue))
-            return results
+            results.append((cs, ce, us, ue))
+        return results
 
     def pre_generate_hook(self, input_ids, **kwargs):
         self.reset_memory(input_ids, kwargs['attention_mask'])
@@ -775,10 +766,12 @@ class UnlimiformerBART(Unlimiformer[BartModel]):
     def process_query(self, output):
         # (batch, time, heads, attn_dim)
         attention = self.model.base_model.decoder.layers[-1].encoder_attn
-        # query: (batch, heads, time, attn_dim)
-        # query = output.view(output.shape[0], output.shape[1], attention.num_heads, attention.head_dim).transpose(1, 2).contiguous()
-        query = output.view(output.shape[0], output.shape[1], attention.num_heads, attention.head_dim).contiguous()
-        return query
+        return output.view(
+            output.shape[0],
+            output.shape[1],
+            attention.num_heads,
+            attention.head_dim,
+        ).contiguous()
 
     def attention_layer_to_capture(self, layer_begin, layer_end): 
         return [
@@ -852,9 +845,9 @@ class UnlimiformerT5(Unlimiformer[T5Model]):
     def process_query(self, output):
         # (batch, time, heads, attn_dim)
         attention = self.model.base_model.decoder.block[-1].layer[1].EncDecAttention
-        # query: (batch, heads, time, attn_dim)
-        query = output.view(output.shape[0], -1, attention.n_heads, attention.key_value_proj_dim).contiguous()
-        return query
+        return output.view(
+            output.shape[0], -1, attention.n_heads, attention.key_value_proj_dim
+        ).contiguous()
 
     def attention_layer_to_capture(self, layer_begin, layer_end):
         return [
